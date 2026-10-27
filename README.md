@@ -50,7 +50,7 @@ Bigger models are smarter but slower and need more memory. Rough guide:
 | 16 GB+ | `qwen3:8b` or `qwen2.5-coder:14b` | 5–9 GB |
 
 The model must support tool calling. Set a default with `export LANTERN_MODEL=qwen2.5-coder:7b`.
-`LANTERN_CONTEXT` sets how many tokens the model sees at once (default 16384; lower it if you run out of memory).
+`LANTERN_CONTEXT` sets how many tokens the model sees at once (default 8192, which keeps `qwen3:4b` fully on the GPU of an 8 GB Mac; raise it on bigger machines).
 
 ## How it works
 

@@ -12,6 +12,7 @@ changes anything.
     lantern --yes              don't ask before edits and commands
 """
 import argparse
+import functools
 import json
 import os
 import subprocess
@@ -21,7 +22,7 @@ import urllib.request
 
 HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 MODEL = os.environ.get("LANTERN_MODEL", "qwen3:4b")
-CONTEXT = int(os.environ.get("LANTERN_CONTEXT", "16384"))  # tokens the model can see at once
+CONTEXT = int(os.environ.get("LANTERN_CONTEXT", "8192"))  # tokens the model can see at once
 MAX_OUTPUT = 12000  # characters of tool output handed back to the model
 
 DIM, BOLD, CYAN, YELLOW, RED, RESET = "\033[2m", "\033[1m", "\033[36m", "\033[33m", "\033[31m", "\033[0m"
@@ -171,21 +172,27 @@ class Session:
     def chat(self):
         """Stream one model reply. Returns the assistant message."""
         body = {"model": self.model, "messages": self.messages, "tools": [schema(t) for t in TOOLS],
-                "stream": True, "think": False, "options": {"num_ctx": CONTEXT}}
+                "stream": True, "think": thinks(self.model), "options": {"num_ctx": CONTEXT}}
         req = urllib.request.Request(HOST + "/api/chat", data=json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json"})
-        content, calls = "", []
+        content, calls, thought = "", [], False
         with urllib.request.urlopen(req, timeout=600) as r:
             for line in r:
                 chunk = json.loads(line)
                 if "error" in chunk:
                     raise RuntimeError(chunk["error"])
                 msg = chunk.get("message", {})
+                if msg.get("thinking"):  # reasoning: shown dimmed, kept out of the answer
+                    print(DIM + msg["thinking"] + RESET, end="", flush=True)
+                    thought = True
                 if msg.get("content"):
+                    if thought:
+                        print()
+                        thought = False
                     content += msg["content"]
                     print(msg["content"], end="", flush=True)
                 calls += msg.get("tool_calls") or []
-        if content:
+        if content or thought:
             print()
         return {"role": "assistant", "content": content, "tool_calls": calls}
 
@@ -204,6 +211,16 @@ class Session:
                 result = self.call(fn["name"], args)
                 self.messages.append({"role": "tool", "tool_name": fn["name"], "content": result})
         print(f"{DIM}(stopped after 40 steps){RESET}")
+
+
+@functools.lru_cache
+def thinks(model):
+    """Whether the model reasons before answering. Thinking-only models like qwen3:4b
+    ignore think=False and mix their reasoning into the answer, so ask for it separately."""
+    req = urllib.request.Request(HOST + "/api/show", data=json.dumps({"model": model}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return "thinking" in (json.load(r).get("capabilities") or [])
 
 
 def check_server(model):
