@@ -1,6 +1,6 @@
 # 🏮 lantern
 
-A coding assistant that runs entirely on your own laptop. No internet, no API key, no account.
+An AI assistant that runs entirely on your own laptop, like an offline Claude. Ask it anything; when a task involves your files it can read, edit and run them too. No internet, no API key, no account.
 
 lantern works like Claude Code in your terminal: you ask for something, and it reads your files, searches them, edits them and runs commands to check its work. It asks before every edit or command. The model runs locally through [Ollama](https://ollama.com), so once the model is downloaded you can use it on a plane.
 

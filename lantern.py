@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""lantern: a coding assistant that runs entirely on your own machine.
+"""lantern: an AI assistant that runs entirely on your own machine.
 
 It talks to a model served by Ollama on localhost, so once the model is
-downloaded it works with no internet at all. Like Claude Code, it can read
-your files, search them, edit them, and run commands, and it asks before it
-changes anything.
+downloaded it works with no internet at all. Ask it anything, like you would
+Claude. When a task involves your files it can read, search and edit them and
+run commands, and it asks before it changes anything.
 
     lantern                    start a session in the current folder
     lantern -m qwen3:8b        use a different model
     lantern "fix the tests"    start with a first message
     lantern --yes              don't ask before edits and commands
+    lantern --show-thinking    print the model's reasoning as it thinks
 """
 import argparse
 import functools
@@ -17,6 +18,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -27,10 +29,16 @@ MAX_OUTPUT = 12000  # characters of tool output handed back to the model
 
 DIM, BOLD, CYAN, YELLOW, RED, RESET = "\033[2m", "\033[1m", "\033[36m", "\033[33m", "\033[31m", "\033[0m"
 
-SYSTEM = """You are lantern, a coding assistant running offline on the user's computer.
-You are working in {cwd}. You can use tools to read, search, write and edit files and to run shell commands.
+SYSTEM = """You are lantern, a helpful AI assistant running offline on the user's computer.
+Help with anything they ask: questions, explanations, writing, studying, planning, advice and code.
+Talk like a friendly, knowledgeable person. You have no internet, so for recent events or facts
+you're unsure of, say so rather than guess.
 
-How to work:
+You are in the folder {cwd}. You have tools to read, search, write and edit files and to run
+shell commands. Use them only when the request is about the user's files or needs a command run.
+For greetings, questions and conversation, just answer; don't call any tools.
+
+When working with files:
 - Look before you change anything: list folders and read the files involved first.
 - Make small, focused edits with edit_file. Use write_file only for new files or full rewrites.
 - After a change, run the relevant command (tests, the script, a build) to check it works.
@@ -142,7 +150,8 @@ def preview(name, args):
 
 
 class Session:
-    def __init__(self, model, yes):
+    def __init__(self, model, yes, show_thinking=False):
+        self.show_thinking = show_thinking
         self.model, self.yes = model, yes
         self.messages = [{"role": "system", "content": SYSTEM.format(cwd=os.getcwd())}]
 
@@ -176,22 +185,41 @@ class Session:
         req = urllib.request.Request(HOST + "/api/chat", data=json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json"})
         content, calls, thought = "", [], False
-        with urllib.request.urlopen(req, timeout=600) as r:
-            for line in r:
-                chunk = json.loads(line)
-                if "error" in chunk:
-                    raise RuntimeError(chunk["error"])
-                msg = chunk.get("message", {})
-                if msg.get("thinking"):  # reasoning: shown dimmed, kept out of the answer
-                    print(DIM + msg["thinking"] + RESET, end="", flush=True)
-                    thought = True
-                if msg.get("content"):
-                    if thought:
-                        print()
-                        thought = False
-                    content += msg["content"]
-                    print(msg["content"], end="", flush=True)
-                calls += msg.get("tool_calls") or []
+        start, status = time.time(), not self.show_thinking
+
+        def clear():  # erase the "thinking..." line before printing anything real
+            nonlocal status
+            if status:
+                print("\r\033[K", end="", flush=True)
+                status = False
+
+        if status:
+            print(f"{DIM}thinking...{RESET}", end="", flush=True)
+        try:
+            with urllib.request.urlopen(req, timeout=600) as r:
+                for line in r:
+                    chunk = json.loads(line)
+                    if "error" in chunk:
+                        raise RuntimeError(chunk["error"])
+                    msg = chunk.get("message", {})
+                    if msg.get("thinking"):  # reasoning: hidden behind a timer unless --show-thinking
+                        if self.show_thinking:
+                            print(DIM + msg["thinking"] + RESET, end="", flush=True)
+                            thought = True
+                        elif status:
+                            print(f"\r{DIM}thinking... {time.time() - start:.0f}s{RESET}", end="", flush=True)
+                    if msg.get("content"):
+                        clear()
+                        if thought:
+                            print()
+                            thought = False
+                        if not content:
+                            msg["content"] = msg["content"].lstrip()
+                        content += msg["content"]
+                        print(msg["content"], end="", flush=True)
+                    calls += msg.get("tool_calls") or []
+        finally:
+            clear()
         if content or thought:
             print()
         return {"role": "assistant", "content": content, "tool_calls": calls}
@@ -228,21 +256,22 @@ def check_server(model):
         with urllib.request.urlopen(HOST + "/api/tags", timeout=5) as r:
             have = [m["name"] for m in json.load(r)["models"]]
     except (urllib.error.URLError, OSError):
-        sys.exit(f"can't reach Ollama at {HOST}. Start it with:  brew services start ollama")
+        sys.exit(f"can't reach Ollama at {HOST}. Start it in another tab with:  ollama serve")
     if model not in have and model + ":latest" not in have:
         sys.exit(f"model {model} isn't downloaded. Get it (needs internet once) with:  ollama pull {model}\n"
                  f"downloaded models: {', '.join(have) or 'none'}")
 
 
 def main():
-    ap = argparse.ArgumentParser(description="offline coding assistant")
+    ap = argparse.ArgumentParser(description="offline AI assistant")
     ap.add_argument("prompt", nargs="*", help="first message")
     ap.add_argument("-m", "--model", default=MODEL)
     ap.add_argument("-y", "--yes", action="store_true", help="don't ask before edits and commands")
+    ap.add_argument("--show-thinking", action="store_true", help="print the model's reasoning")
     args = ap.parse_args()
     check_server(args.model)
 
-    s = Session(args.model, args.yes)
+    s = Session(args.model, args.yes, args.show_thinking)
     print(f"{BOLD}🏮 lantern{RESET} {DIM}{args.model} · {os.getcwd()} · /help for commands{RESET}")
     first = " ".join(args.prompt)
     while True:
@@ -260,7 +289,7 @@ def main():
             print("/clear  forget the conversation\n/model NAME  switch models\n/exit  quit")
             continue
         if text == "/clear":
-            s = Session(s.model, s.yes)
+            s = Session(s.model, s.yes, s.show_thinking)
             print(f"{DIM}cleared{RESET}")
             continue
         if text.startswith("/model"):
