@@ -6,7 +6,7 @@ lantern works like Claude Code in your terminal: you ask for something, and it r
 
 ```
 $ lantern
-🏮 lantern qwen3:4b · ~/my-project · /help for commands
+🏮 lantern qwen3:4b-instruct · ~/my-project · /help for commands
 
 > why does test_parse fail?
   search def test_parse
@@ -19,7 +19,7 @@ $ lantern
 ```sh
 brew install ollama
 brew services start ollama      # keeps the model server running in the background
-ollama pull qwen3:4b            # ~2.5 GB, the default model
+ollama pull qwen3:4b-instruct   # ~2.5 GB, the default model (no thinking step, so it answers fast)
 ./install.sh                    # puts `lantern` on your PATH
 ```
 
@@ -45,12 +45,12 @@ Bigger models are smarter but slower and need more memory. Rough guide:
 
 | RAM | Model | Download |
 |---|---|---|
-| 8 GB | `qwen3:4b` (default) | 2.5 GB |
+| 8 GB | `qwen3:4b-instruct` (default), or `qwen3:4b` for slower step-by-step reasoning | 2.5 GB |
 | 8 GB, if you close other apps | `qwen2.5-coder:7b` | 4.7 GB |
 | 16 GB+ | `qwen3:8b` or `qwen2.5-coder:14b` | 5–9 GB |
 
 The model must support tool calling. Set a default with `export LANTERN_MODEL=qwen2.5-coder:7b`.
-`LANTERN_CONTEXT` sets how many tokens the model sees at once (default 8192, which keeps `qwen3:4b` fully on the GPU of an 8 GB Mac; raise it on bigger machines).
+`LANTERN_CONTEXT` sets how many tokens the model sees at once (default 8192, which keeps a 4B model fully on the GPU of an 8 GB Mac; raise it on bigger machines).
 
 ## How it works
 

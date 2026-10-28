@@ -23,7 +23,7 @@ import urllib.error
 import urllib.request
 
 HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-MODEL = os.environ.get("LANTERN_MODEL", "qwen3:4b")
+MODEL = os.environ.get("LANTERN_MODEL", "qwen3:4b-instruct")
 CONTEXT = int(os.environ.get("LANTERN_CONTEXT", "8192"))  # tokens the model can see at once
 MAX_OUTPUT = 12000  # characters of tool output handed back to the model
 
