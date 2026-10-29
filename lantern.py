@@ -251,7 +251,31 @@ def thinks(model):
         return "thinking" in (json.load(r).get("capabilities") or [])
 
 
+def start_server():
+    """Start `ollama serve` in the background and wait for it to answer. It keeps running
+    after lantern exits, so later sessions start instantly."""
+    log = open(os.path.expanduser("~/.ollama/lantern-serve.log"), "ab")
+    try:
+        subprocess.Popen(["ollama", "serve"], stdout=log, stderr=log, stdin=subprocess.DEVNULL,
+                         start_new_session=True)
+    except FileNotFoundError:
+        sys.exit("Ollama isn't installed. Get it (needs internet once) with:  brew install ollama")
+    print(f"{DIM}starting Ollama…{RESET}")
+    for _ in range(30):
+        time.sleep(0.5)
+        try:
+            urllib.request.urlopen(HOST + "/api/tags", timeout=2).close()
+            return
+        except (urllib.error.URLError, OSError):
+            pass
+    sys.exit("Ollama didn't start; see ~/.ollama/lantern-serve.log")
+
+
 def check_server(model):
+    try:
+        urllib.request.urlopen(HOST + "/api/tags", timeout=5).close()
+    except (urllib.error.URLError, OSError):
+        start_server()
     try:
         with urllib.request.urlopen(HOST + "/api/tags", timeout=5) as r:
             have = [m["name"] for m in json.load(r)["models"]]
