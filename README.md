@@ -68,7 +68,7 @@ lantern --yes                   # skip the allow prompts
 lantern --show-thinking         # print the model's reasoning as it thinks
 ```
 
-lantern works on the folder you start it in, so `cd` into your project first.
+lantern starts in the folder you run it from, so `cd` into your project first. It can still open any other path you name, including `~` paths like `~/notes/todo.md`.
 
 In a session:
 
