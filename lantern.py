@@ -34,7 +34,8 @@ Help with anything they ask: questions, explanations, writing, studying, plannin
 Talk like a friendly, knowledgeable person. You have no internet, so for recent events or facts
 you're unsure of, say so rather than guess.
 
-You are in the folder {cwd}. You have tools to read, search, write and edit files and to run
+You started in the folder {cwd}, but you can use any path on the computer, including ~ for the
+home folder ({home}). When the user names a file or folder, open that exact path. You have tools to read, search, write and edit files and to run
 shell commands. Use them only when the request is about the user's files or needs a command run.
 For greetings, questions and conversation, just answer; don't call any tools.
 
@@ -80,13 +81,18 @@ def clip(text):
     return text[:MAX_OUTPUT] + f"\n... ({len(text) - MAX_OUTPUT} more characters cut)"
 
 
+def expand(path):
+    return os.path.expanduser(path)
+
+
 def list_dir(path="."):
+    path = expand(path)
     names = sorted(os.listdir(path))
     return "\n".join(n + ("/" if os.path.isdir(os.path.join(path, n)) else "") for n in names if n != ".git") or "(empty)"
 
 
 def read_file(path, start=1, count=400):
-    with open(path, errors="replace") as f:
+    with open(expand(path), errors="replace") as f:
         lines = f.readlines()
     start = max(int(start), 1)
     chunk = lines[start - 1:start - 1 + int(count)]
@@ -97,12 +103,13 @@ def read_file(path, start=1, count=400):
 
 
 def search(pattern, path="."):
-    r = subprocess.run(["grep", "-rnIE", "--exclude-dir=.git", "--exclude-dir=node_modules", pattern, path],
+    r = subprocess.run(["grep", "-rnIE", "--exclude-dir=.git", "--exclude-dir=node_modules", pattern, expand(path)],
                        capture_output=True, text=True)
     return r.stdout or "no matches"
 
 
 def write_file(path, content):
+    path = expand(path)
     if os.path.dirname(path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
@@ -111,6 +118,7 @@ def write_file(path, content):
 
 
 def edit_file(path, old, new):
+    path = expand(path)
     with open(path) as f:
         text = f.read()
     n = text.count(old)
@@ -153,7 +161,7 @@ class Session:
     def __init__(self, model, yes, show_thinking=False):
         self.show_thinking = show_thinking
         self.model, self.yes = model, yes
-        self.messages = [{"role": "system", "content": SYSTEM.format(cwd=os.getcwd())}]
+        self.messages = [{"role": "system", "content": SYSTEM.format(cwd=os.getcwd(), home=os.path.expanduser("~"))}]
 
     def allowed(self, name, args):
         print(f"\n{YELLOW}{preview(name, args)}{RESET}")
